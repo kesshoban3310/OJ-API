@@ -311,7 +311,7 @@ func (s *Sandbox) runExecute(box int, ctx context.Context, qt models.QuestionTes
 		}
 		safeName := strings.ReplaceAll(target.Target, "/", "_")
 		metaPath := filepath.Join(
-			"/var/local/lib/isolate",
+			os.Getenv("ISOLATE_PATH"),
 			fmt.Sprintf("%d/box/meta_%s.txt", box, safeName),
 		)
 
