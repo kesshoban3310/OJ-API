@@ -217,6 +217,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	_, flag := metaMain(os.Args[1], "utils/resource.json")
+	if !flag {
+		writeScore(0.0)
+		return
+	}
+
 	parser, err := NewJSONParser(os.Args[1], os.Args[2])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating parser: %v\n", err)

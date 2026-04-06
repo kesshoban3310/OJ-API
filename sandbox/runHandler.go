@@ -140,6 +140,7 @@ func (s *Sandbox) runShellCommand(parentCtx context.Context, judgeinfo JudgeInfo
 		}
 
 		s.getJsonfromdb(fmt.Sprintf("%v/%s", string(boxRoot), "utils"), cmd)
+		s.getResourcefromdb(fmt.Sprintf("%v/%s", string(boxRoot), "utils"), cmd)
 	}
 	defer os.RemoveAll(string(codePath))
 	defer os.RemoveAll(string(mothercodePath))
@@ -308,6 +309,12 @@ func (s *Sandbox) runExecute(box int, ctx context.Context, qt models.QuestionTes
 			results = append(results, result)
 			continue
 		}
+		safeName := strings.ReplaceAll(target.Target, "/", "_")
+		metaPath := filepath.Join(
+			"/var/local/lib/isolate",
+			fmt.Sprintf("%d/box/meta_%s.txt", box, safeName),
+		)
+
 		cmdArgs := []string{
 			fmt.Sprintf("--box-id=%v", box),
 			fmt.Sprintf("--fsize=%v", qt.FileSize),
@@ -315,9 +322,10 @@ func (s *Sandbox) runExecute(box int, ctx context.Context, qt models.QuestionTes
 			fmt.Sprintf("--processes=%v", qt.Processes),
 			fmt.Sprintf("--open-files=%v", qt.OpenFiles),
 			"--env=PATH",
-			fmt.Sprintf("--time=%.3f", float64(qt.Time)/1000.0),
-			fmt.Sprintf("--wall-time=%.3f", float64(qt.WallTime)/1000.0),
-			fmt.Sprintf("--mem=%v", qt.Memory),
+			fmt.Sprintf("--time=%.3f", float64(qt.Time)/1000.0*3.0/2.0),
+			fmt.Sprintf("--wall-time=%.3f", float64(qt.WallTime)/1000.0*3.0/2.0),
+			fmt.Sprintf("--mem=%v", qt.Memory*3/2), // 給予額外的記憶體緩衝，避免因為測試程式的額外開銷而導致不必要的記憶體限制
+			fmt.Sprintf("--meta=%s", metaPath),
 			fmt.Sprintf("--stack=%v", qt.StackMemory),
 		}
 
@@ -378,16 +386,6 @@ func (s *Sandbox) runExecute(box int, ctx context.Context, qt models.QuestionTes
 func (s *Sandbox) runScore(box int, ctx context.Context, shellCommand string, codePath []byte, mergeResult []SandboxJudgeResult) []SandboxScoreResult {
 	var results []SandboxScoreResult
 	for _, target := range mergeResult {
-		if target.Status != "SUCCESS" {
-			result := SandboxScoreResult{
-				Target: target.Target,
-				Result: target.Result,
-				Status: target.Status,
-				Score:  0.0,
-			}
-			results = append(results, result)
-			continue
-		}
 		cmdArgs := []string{
 			fmt.Sprintf("--box-id=%v", box),
 			"--fsize=10240",
@@ -426,7 +424,38 @@ func (s *Sandbox) runScore(box int, ctx context.Context, shellCommand string, co
 		results = append(results, result)
 	}
 
+	for _, r := range results {
+		utils.Debugf("[runScore] Target=%s Status=%s Score=%.2f",
+			r.Target, r.Status, r.Score)
+	}
+
 	return results
+}
+
+func (s *Sandbox) getResourcefromdb(path string, row models.QuestionTestScript) {
+
+	rc := ResourceConfig{
+		Memory:      row.Memory,
+		StackMemory: row.StackMemory,
+		Time:        row.Time,
+		WallTime:    row.WallTime,
+		FileSize:    row.FileSize,
+		Processes:   row.Processes,
+		OpenFiles:   row.OpenFiles,
+	}
+
+	data, err := json.MarshalIndent(rc, "", "  ")
+	if err != nil {
+		return
+	}
+
+	filename := "resource.json"
+	filepath := filepath.Join(path, filename)
+
+	if err := os.WriteFile(filepath, data, 0644); err != nil {
+		fmt.Println("WriteFile error:", err)
+		return
+	}
 }
 
 func (s *Sandbox) getJsonfromdb(path string, row models.QuestionTestScript) {
