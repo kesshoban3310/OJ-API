@@ -29,6 +29,16 @@ type SandboxJudgeResult struct {
 	Result string `json:"result"`
 }
 
+type ResourceConfig struct {
+	Memory      uint `json:"memory"`
+	StackMemory uint `json:"stack_memory"`
+	Time        uint `json:"time"`
+	WallTime    uint `json:"wall_time"`
+	FileSize    uint `json:"file_size"`
+	Processes   uint `json:"processes"`
+	OpenFiles   uint `json:"open_files"`
+}
+
 type SandboxScoreResult struct {
 	Target string  `json:"target"`
 	Status string  `json:"status"`

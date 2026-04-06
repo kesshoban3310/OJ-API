@@ -1,7 +1,9 @@
 package sandbox
 
 import (
+	"OJ-API/utils"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -88,6 +90,17 @@ func generateErrorSuite(target, errName, errMsg string) TestSuite {
 	}
 }
 
+// --- 讀取 meta 結果 ---
+func readMetaResult(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	status := strings.TrimSpace(string(data))
+	return status, nil
+}
+
 // --- 主流程：整合 message.txt + score.txt + failed result ---
 func MergeJudgeResults(baseDir string, finalResults []SandboxScoreResult) (AllTests, float64, error) {
 	var all AllTests
@@ -126,14 +139,29 @@ func MergeJudgeResults(baseDir string, finalResults []SandboxScoreResult) (AllTe
 
 	// 只處理失敗結果
 	for _, r := range finalResults {
-		if strings.EqualFold(r.Status, "SUCCESS") {
-			continue // ✅ 成功的不插入
-		}
-		if existing[r.Target] {
-			continue // 若原本就存在，不重複插入
+
+		metaPath := filepath.Join(baseDir, fmt.Sprintf("meta_%s_result.txt", r.Target))
+		status, err := readMetaResult(metaPath)
+
+		if err != nil {
+			utils.Debugf("[Merge] meta not found for %s", r.Target)
+			status = string(RUNTIME_ERROR) // fallback
 		}
 
-		errSuite := generateErrorSuite(r.Target, r.Status, r.Result)
+		utils.Debugf("[Merge] target=%s status=%s", r.Target, status)
+
+		// ✅ AC 跳過
+		if string(ACCEPTED) == status {
+			continue
+		}
+
+		if existing[r.Target] {
+			continue
+		}
+
+		// 🔥 用 meta 的 status，不是 r.Status
+		errSuite := generateErrorSuite(r.Target, status, status)
+
 		all.TestSuites = append(all.TestSuites, errSuite)
 		all.Failures++
 		all.Tests++
